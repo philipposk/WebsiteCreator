@@ -31,7 +31,6 @@ export async function GET() {
         console.log("Found settings blob:", {
           pathname: settingsBlob.pathname,
           url: settingsBlob.url,
-          size: settingsBlob.size,
         });
         cachedBlobUrl = settingsBlob.url;
 
@@ -152,7 +151,6 @@ export async function POST(request: NextRequest) {
     console.log("Settings saved to blob successfully:", {
       url: blob.url,
       pathname: blob.pathname,
-      size: blob.size,
     });
     
     // Cache the URL for faster retrieval

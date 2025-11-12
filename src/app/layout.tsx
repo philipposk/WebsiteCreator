@@ -74,12 +74,13 @@ export const metadata: Metadata = {
   title: "Website Creator · Build Beautiful Websites",
   description:
     "Create and customize beautiful websites with our easy-to-use website builder. Choose from templates, customize design, and export your website.",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
