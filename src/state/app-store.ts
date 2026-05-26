@@ -27,6 +27,10 @@ type AppStore = {
   generatedHTML: string;
   isGenerating: boolean;
 
+  // Undo/redo history (snapshots of websiteInfo)
+  past: WebsiteInfo[];
+  future: WebsiteInfo[];
+
   // Actions
   setWebsiteInfo: (info: Partial<WebsiteInfo>) => void;
   setWebsiteSections: (sections: Partial<WebsiteSections>) => void;
@@ -42,6 +46,10 @@ type AppStore = {
   deleteWebsite: (websiteId: string) => void;
   newWebsite: () => void;
   reset: () => void;
+  // Undo/redo
+  pushSnapshot: () => void;
+  undo: () => void;
+  redo: () => void;
 };
 
 const STORAGE_KEY = "website-creator-websites";
@@ -163,12 +171,16 @@ const autoSaveDraft = (getState: () => AppStore, delay: number = 800) => {
   }, delay);
 };
 
+const MAX_HISTORY = 20;
+
 export const useAppStore = create<AppStore>((set, get) => ({
   currentWebsiteId: null,
   websites: loadWebsitesFromStorage(),
   websiteInfo: defaultWebsiteInfo,
   generatedHTML: "",
   isGenerating: false,
+  past: [],
+  future: [],
   
   setWebsiteInfo: (info) => {
     set((state) => ({
@@ -339,7 +351,39 @@ export const useAppStore = create<AppStore>((set, get) => ({
       websiteInfo: defaultWebsiteInfo,
       generatedHTML: "",
       isGenerating: false,
+      past: [],
+      future: [],
     })),
+
+  pushSnapshot: () => {
+    const state = get();
+    const past = [...state.past, state.websiteInfo].slice(-MAX_HISTORY);
+    set({ past, future: [] });
+  },
+
+  undo: () => {
+    const { past, websiteInfo, future } = get();
+    if (!past.length) return;
+    const prev = past[past.length - 1];
+    set({
+      past: past.slice(0, -1),
+      websiteInfo: prev,
+      future: [websiteInfo, ...future].slice(0, MAX_HISTORY),
+    });
+    autoSaveDraft(get);
+  },
+
+  redo: () => {
+    const { past, websiteInfo, future } = get();
+    if (!future.length) return;
+    const next = future[0];
+    set({
+      past: [...past, websiteInfo].slice(-MAX_HISTORY),
+      websiteInfo: next,
+      future: future.slice(1),
+    });
+    autoSaveDraft(get);
+  },
 }));
 
 // Load from API first, then fallback to localStorage on client side

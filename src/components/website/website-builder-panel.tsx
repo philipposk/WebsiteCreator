@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useAppStore } from "@/state/app-store";
 import { WebsiteBuilderForm } from "./website-builder-form";
 import { WebsiteSections } from "./website-sections";
 import { WebsitePreview } from "./website-preview";
 import { ContentEditor } from "./content-editor";
+import { ChatPanel } from "./chat-panel";
 import {
   Loader2,
   X,
@@ -15,10 +17,13 @@ import {
   Copy,
   LogIn,
   AlertTriangle,
+  RotateCcw,
+  RotateCw,
+  BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "form" | "sections" | "content" | "preview";
+type Tab = "form" | "sections" | "content" | "chat" | "preview";
 
 type Health = {
   blob: boolean;
@@ -40,6 +45,12 @@ export const WebsiteBuilderPanel = () => {
 
   const current = websites.find((w) => w.id === currentWebsiteId);
 
+  const past = useAppStore((s) => s.past);
+  const future = useAppStore((s) => s.future);
+  const undo = useAppStore((s) => s.undo);
+  const redo = useAppStore((s) => s.redo);
+  const pushSnapshot = useAppStore((s) => s.pushSnapshot);
+
   const [activeTab, setActiveTab] = useState<Tab>("form");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,6 +59,7 @@ export const WebsiteBuilderPanel = () => {
   const [aiBusy, setAIBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
+  const [views, setViews] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/health")
@@ -55,6 +67,43 @@ export const WebsiteBuilderPanel = () => {
       .then((data) => data && setHealth(data))
       .catch(() => setHealth(null));
   }, []);
+
+  // Load view count when published site changes
+  useEffect(() => {
+    if (!currentWebsiteId || !current?.published) {
+      setViews(null);
+      return;
+    }
+    fetch(`/api/analytics?site=${encodeURIComponent(currentWebsiteId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setViews(data.views ?? 0))
+      .catch(() => setViews(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWebsiteId, current?.published?.publishedAt]);
+
+  // Keyboard shortcuts: Cmd+Z = undo, Cmd+Shift+Z = redo
+  const handleKeyboard = useCallback(
+    (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "z" && !e.shiftKey) {
+        if (past.length > 0) {
+          e.preventDefault();
+          undo();
+        }
+      } else if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+        if (future.length > 0) {
+          e.preventDefault();
+          redo();
+        }
+      }
+    },
+    [past, future, undo, redo]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyboard);
+    return () => document.removeEventListener("keydown", handleKeyboard);
+  }, [handleKeyboard]);
 
   useEffect(() => {
     if (!error) return;
@@ -84,6 +133,7 @@ export const WebsiteBuilderPanel = () => {
       }
       const data = await res.json();
       const s = data.suggestion as Partial<typeof websiteInfo>;
+      pushSnapshot();
       const scalarPatch: Partial<typeof websiteInfo> = {};
       (["name", "description", "tagline", "phone", "email", "address"] as const).forEach((k) => {
         if (typeof s[k] === "string" && s[k]) scalarPatch[k] = s[k] as string;
@@ -187,19 +237,36 @@ export const WebsiteBuilderPanel = () => {
             {tab("form", "Basics")}
             {tab("sections", "Sections")}
             {tab("content", "Content")}
+            {tab("chat", "AI Chat")}
             {tab("preview", "Preview")}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {health?.auth && (
-            <a
+            <Link
               href="/api/auth/signin"
               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10"
             >
               <LogIn className="h-4 w-4" />
               Sign in
-            </a>
+            </Link>
           )}
+          <button
+            onClick={undo}
+            disabled={past.length === 0}
+            title="Undo (⌘Z)"
+            className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={future.length === 0}
+            title="Redo (⌘⇧Z)"
+            className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-white/70 transition hover:bg-white/10 hover:text-white disabled:opacity-30"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
           <button
             onClick={() => setShowAIFill((v) => !v)}
             disabled={isGenerating || groqMissing === true}
@@ -237,7 +304,7 @@ export const WebsiteBuilderPanel = () => {
 
       {current?.published && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Globe className="h-4 w-4" />
             <span>Live at</span>
             <a
@@ -248,6 +315,12 @@ export const WebsiteBuilderPanel = () => {
             >
               {current.published.url}
             </a>
+            {views !== null && (
+              <span className="flex items-center gap-1 text-xs text-emerald-300/70">
+                <BarChart2 className="h-3 w-3" />
+                {views.toLocaleString()} view{views !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -361,6 +434,7 @@ export const WebsiteBuilderPanel = () => {
           </div>
         )}
         {activeTab === "content" && <ContentEditor />}
+        {activeTab === "chat" && <ChatPanel />}
         {activeTab === "preview" && <WebsitePreview />}
       </div>
     </div>

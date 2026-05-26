@@ -444,6 +444,7 @@ ${buildSections(info, opts.siteId)}
 <footer>
   <p>&copy; ${new Date().getFullYear()} ${escape(title)}. All rights reserved.</p>
 </footer>
+${opts.siteId && opts.canonicalUrl ? `<img src="/api/analytics?site=${encodeURIComponent(opts.siteId)}" width="1" height="1" alt="" style="position:absolute;opacity:0;pointer-events:none;" loading="eager" />` : ""}
 </body>
 </html>`;
 }

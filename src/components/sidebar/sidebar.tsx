@@ -162,6 +162,7 @@ export const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 

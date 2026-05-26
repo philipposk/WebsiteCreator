@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { WebsiteBuilderPanel } from "@/components/website/website-builder-panel";
 import { Sidebar } from "@/components/sidebar/sidebar";
-import { useAppStore, loadStoredSettings } from "@/state/app-store";
+import { loadStoredSettings } from "@/state/app-store";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 

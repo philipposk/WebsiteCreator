@@ -38,7 +38,7 @@ async function isSlugAvailable(slug: string, tenantId: string): Promise<boolean>
 }
 
 async function pickAvailableSlug(base: string, tenantId: string): Promise<string> {
-  let slug = slugify(base);
+  const slug = slugify(base);
   if (await isSlugAvailable(slug, tenantId)) return slug;
   for (let i = 2; i < 50; i++) {
     const candidate = `${slug}-${i}`;

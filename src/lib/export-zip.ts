@@ -8,8 +8,6 @@
 
 import JSZip from "jszip";
 
-const IMG_ATTRS = ["src", "content", "href"] as const;
-
 type ImageMap = Map<string, string>; // original URL -> local zip path
 
 function extractImageUrls(html: string): string[] {
