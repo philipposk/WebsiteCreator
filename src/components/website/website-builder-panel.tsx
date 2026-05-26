@@ -20,6 +20,8 @@ import {
   RotateCcw,
   RotateCw,
   BarChart2,
+  Import,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +32,7 @@ type Health = {
   groq: boolean;
   auth: boolean;
   email: boolean;
+  billing: boolean;
 };
 
 export const WebsiteBuilderPanel = () => {
@@ -60,6 +63,10 @@ export const WebsiteBuilderPanel = () => {
   const [publishBusy, setPublishBusy] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [views, setViews] = useState<number | null>(null);
+  const [showImportUrl, setShowImportUrl] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/health")
@@ -158,6 +165,51 @@ export const WebsiteBuilderPanel = () => {
     }
   };
 
+  const handleImportUrl = async () => {
+    const url = importUrl.trim();
+    if (!url) return;
+    setImportBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/website/import-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Import failed (${res.status})`);
+      }
+      const { suggestion } = await res.json();
+      pushSnapshot();
+      const scalarKeys = ["name", "tagline", "description", "phone", "email", "address", "primaryColor", "fontFamily"] as const;
+      const scalars: Partial<typeof websiteInfo> = {};
+      for (const k of scalarKeys) {
+        if (typeof suggestion[k] === "string" && suggestion[k]) {
+          (scalars as Record<string, string>)[k] = suggestion[k] as string;
+        }
+      }
+      if (Object.keys(scalars).length) setWebsiteInfo(scalars);
+      replaceContent({
+        ...(Array.isArray(suggestion.services) ? { services: suggestion.services } : {}),
+        ...(Array.isArray(suggestion.reviews) ? { reviews: suggestion.reviews } : {}),
+        ...(Array.isArray(suggestion.portfolio) ? { portfolio: suggestion.portfolio } : {}),
+        ...(Array.isArray(suggestion.team) ? { team: suggestion.team } : {}),
+        ...(Array.isArray(suggestion.blog) ? { blog: suggestion.blog } : {}),
+        ...(Array.isArray(suggestion.products) ? { products: suggestion.products } : {}),
+      });
+      setShowImportUrl(false);
+      setImportUrl("");
+      setActiveTab("content");
+      setNotice("Imported! Review and edit the content, then publish.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Import failed";
+      setError(msg);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!websiteInfo.name.trim()) {
       setError("Please enter a website name in the Basics tab first.");
@@ -167,9 +219,35 @@ export const WebsiteBuilderPanel = () => {
     setError(null);
     setPublishBusy(true);
     setIsGenerating(true);
+    setCheckoutUrl(null);
     try {
       const id = saveWebsite();
       if (!id) throw new Error("Could not save the draft");
+
+      // Billing gate — check if this site is paid for
+      if (health?.billing) {
+        const checkRes = await fetch(`/api/billing/check?site=${encodeURIComponent(id)}`);
+        if (checkRes.ok) {
+          const { paid } = (await checkRes.json()) as { paid: boolean };
+          if (!paid) {
+            // Kick off checkout
+            const coRes = await fetch("/api/billing/checkout", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ websiteId: id, websiteName: websiteInfo.name }),
+            });
+            if (coRes.ok) {
+              const coData = await coRes.json();
+              if (coData.url) {
+                setCheckoutUrl(coData.url);
+                setPublishBusy(false);
+                setIsGenerating(false);
+                return;
+              }
+            }
+          }
+        }
+      }
       const res = await fetch("/api/website/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -268,7 +346,16 @@ export const WebsiteBuilderPanel = () => {
             <RotateCw className="h-4 w-4" />
           </button>
           <button
-            onClick={() => setShowAIFill((v) => !v)}
+            onClick={() => { setShowImportUrl((v) => !v); setShowAIFill(false); }}
+            disabled={isGenerating || groqMissing === true}
+            title={groqMissing ? "GROQ_API_KEY not configured" : "Import from existing website URL"}
+            className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:opacity-50"
+          >
+            <Import className="h-4 w-4" />
+            Import URL
+          </button>
+          <button
+            onClick={() => { setShowAIFill((v) => !v); setShowImportUrl(false); }}
             disabled={isGenerating || groqMissing === true}
             title={groqMissing ? "GROQ_API_KEY not configured" : ""}
             className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:opacity-50"
@@ -359,6 +446,68 @@ export const WebsiteBuilderPanel = () => {
                 draft content from a prompt.
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {showImportUrl && (
+        <div className="border-b border-white/10 bg-black/40 px-4 py-3">
+          <label className="mb-1 block text-xs font-medium text-white/70">
+            Paste an existing website URL — AI will rebuild it as an editable draft
+          </label>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <input
+              type="url"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleImportUrl(); }}
+              placeholder="https://example.com"
+              className="flex-1 min-w-[280px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-accent focus:outline-none"
+            />
+            <button
+              onClick={() => void handleImportUrl()}
+              disabled={importBusy || !importUrl.trim()}
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent/90 disabled:opacity-50"
+            >
+              {importBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importing…
+                </>
+              ) : (
+                <>
+                  <Import className="h-4 w-4" />
+                  Import
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {checkoutUrl && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm text-violet-200">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            <span>One-time payment required to publish this site (€9).</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={checkoutUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-violet-500"
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              Pay &amp; Publish
+            </a>
+            <button
+              onClick={() => setCheckoutUrl(null)}
+              className="rounded p-1 text-violet-300/60 hover:text-violet-200"
+              aria-label="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}

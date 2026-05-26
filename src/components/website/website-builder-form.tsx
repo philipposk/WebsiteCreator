@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { FastAverageColor } from "fast-average-color";
 import { useAppStore } from "@/state/app-store";
 import { type WebsiteTemplate } from "@/lib/types";
 import { Palette, Type, Globe, Mail, Phone, MapPin, FileText, Image as ImageIcon } from "lucide-react";
@@ -25,8 +27,31 @@ export const WebsiteBuilderForm = () => {
   const setWebsiteInfo = useAppStore((state) => state.setWebsiteInfo);
   const isGenerating = useAppStore((state) => state.isGenerating);
 
+  const [extractingColor, setExtractingColor] = useState(false);
+
   const handleInputChange = (field: keyof typeof websiteInfo, value: string) => {
     setWebsiteInfo({ [field]: value });
+  };
+
+  const extractColorFromLogo = async () => {
+    if (!websiteInfo.logoUrl) return;
+    setExtractingColor(true);
+    try {
+      const fac = new FastAverageColor();
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = websiteInfo.logoUrl;
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+      });
+      const color = await fac.getColorAsync(img);
+      handleInputChange("primaryColor", color.hex);
+    } catch {
+      // silently fail
+    } finally {
+      setExtractingColor(false);
+    }
   };
 
   const handleTemplateChange = (template: WebsiteTemplate) => {
@@ -170,6 +195,26 @@ export const WebsiteBuilderForm = () => {
               onChange={(url) => handleInputChange("logoUrl", url)}
               disabled={isGenerating}
             />
+            {websiteInfo.logoUrl && (
+              <button
+                type="button"
+                onClick={() => void extractColorFromLogo()}
+                disabled={extractingColor || isGenerating}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10 disabled:opacity-50 col-span-full"
+              >
+                {extractingColor ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    Extracting…
+                  </>
+                ) : (
+                  <>
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30" style={{ backgroundColor: websiteInfo.primaryColor }} />
+                    Extract brand color from logo
+                  </>
+                )}
+              </button>
+            )}
             <ImageUpload
               label="Social share image (Open Graph)"
               value={websiteInfo.ogImageUrl}

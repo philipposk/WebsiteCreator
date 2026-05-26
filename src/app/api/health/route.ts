@@ -8,5 +8,6 @@ export async function GET() {
     groq: !!process.env.GROQ_API_KEY,
     auth: authConfigured(),
     email: !!(process.env.RESEND_API_KEY && process.env.CONTACT_TO_EMAIL),
+    billing: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   });
 }
