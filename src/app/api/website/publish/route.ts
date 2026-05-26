@@ -73,20 +73,49 @@ export async function POST(request: NextRequest) {
     const canonicalUrl = `${origin}/s/${slug}`;
     const html = buildHTML(info, { siteId: body.websiteId, canonicalUrl });
 
-    const sitePath = `${tenantPrefix(tenant)}/sites/${slug}/index.html`;
-    const siteBlob = await put(sitePath, html, {
-      access: "public",
-      contentType: "text/html; charset=utf-8",
-      allowOverwrite: true,
-      addRandomSuffix: false,
-    });
+    const tenantPath = tenantPrefix(tenant);
+    const publishedAt = new Date().toISOString();
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${canonicalUrl}</loc>
+    <lastmod>${publishedAt.slice(0, 10)}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`;
+    const robots = `User-agent: *\nAllow: /\nSitemap: ${canonicalUrl}/sitemap.xml\n`;
+
+    const [siteBlob, sitemapBlob, robotsBlob] = await Promise.all([
+      put(`${tenantPath}/sites/${slug}/index.html`, html, {
+        access: "public",
+        contentType: "text/html; charset=utf-8",
+        allowOverwrite: true,
+        addRandomSuffix: false,
+      }),
+      put(`${tenantPath}/sites/${slug}/sitemap.xml`, sitemap, {
+        access: "public",
+        contentType: "application/xml",
+        allowOverwrite: true,
+        addRandomSuffix: false,
+      }),
+      put(`${tenantPath}/sites/${slug}/robots.txt`, robots, {
+        access: "public",
+        contentType: "text/plain",
+        allowOverwrite: true,
+        addRandomSuffix: false,
+      }),
+    ]);
 
     const indexPath = `sites-index/${slug}.json`;
     const indexPayload = JSON.stringify({
       tenantId: tenant.id,
       websiteId: body.websiteId,
       blobUrl: siteBlob.url,
-      publishedAt: new Date().toISOString(),
+      sitemapUrl: sitemapBlob.url,
+      robotsUrl: robotsBlob.url,
+      publishedAt,
     });
     await put(indexPath, indexPayload, {
       access: "public",
@@ -100,7 +129,9 @@ export async function POST(request: NextRequest) {
       slug,
       url: canonicalUrl,
       blobUrl: siteBlob.url,
-      publishedAt: new Date().toISOString(),
+      sitemapUrl: `${canonicalUrl}/sitemap.xml`,
+      robotsUrl: `${canonicalUrl}/robots.txt`,
+      publishedAt,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

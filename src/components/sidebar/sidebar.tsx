@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Plus, Clock, User, Trash2, Pencil, FileText, Check, X, Globe } from "lucide-react";
+import { Plus, Clock, User, Trash2, Pencil, FileText, Check, X, Globe, Archive } from "lucide-react";
 import { useAppStore } from "@/state/app-store";
 import { cn } from "@/lib/utils";
+import { buildHTML, slugify } from "@/lib/build-html";
+import { buildSiteZip } from "@/lib/export-zip";
+import { normalizeWebsiteInfo } from "@/lib/normalize";
 
 export const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const websites = useAppStore((state) => state.websites);
@@ -74,23 +77,51 @@ export const Sidebar = ({ onClose }: { onClose?: () => void }) => {
     setRenameValue("");
   };
 
-  const handleExportWebsite = (websiteId: string) => {
+  const handleExportHtml = (websiteId: string) => {
     const website = websites.find((w) => w.id === websiteId);
-    if (!website || !website.htmlCode) {
-      alert("No website code to export");
+    if (!website) return;
+    const info = normalizeWebsiteInfo(website.info);
+    if (!info.name) {
+      alert("Add a website name first.");
       return;
     }
-
-    const blob = new Blob([website.htmlCode], { type: "text/html" });
+    const html = buildHTML(info, { siteId: website.id });
+    const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${website.name.replace(/[^a-z0-9]/gi, "_")}_${Date.now()}.html`;
+    a.download = `${slugify(info.name)}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setShowMenuWebsiteId(null);
+  };
+
+  const handleExportZip = async (websiteId: string) => {
+    const website = websites.find((w) => w.id === websiteId);
+    if (!website) return;
+    const info = normalizeWebsiteInfo(website.info);
+    if (!info.name) {
+      alert("Add a website name first.");
+      return;
+    }
+    setShowMenuWebsiteId(null);
+    try {
+      const html = buildHTML(info, { siteId: website.id });
+      const zip = await buildSiteZip({ html, filenameBase: info.name });
+      const url = URL.createObjectURL(zip);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slugify(info.name)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("zip export failed", e);
+      alert("Zip export failed. Check the console for details.");
+    }
   };
 
   // Focus rename input when editing starts
@@ -271,12 +302,22 @@ export const Sidebar = ({ onClose }: { onClose?: () => void }) => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleExportWebsite(website.id);
+                                    handleExportHtml(website.id);
                                   }}
                                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-white/90 transition hover:bg-white/10"
                                 >
                                   <FileText className="h-3 w-3" />
-                                  <span>Export</span>
+                                  <span>Export HTML</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleExportZip(website.id);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-white/90 transition hover:bg-white/10"
+                                >
+                                  <Archive className="h-3 w-3" />
+                                  <span>Export ZIP</span>
                                 </button>
                                 <button
                                   onClick={(e) => handleDeleteWebsite(e, website.id)}

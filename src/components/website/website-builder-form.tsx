@@ -6,6 +6,7 @@ import { Palette, Type, Globe, Mail, Phone, MapPin, FileText, Image as ImageIcon
 import { cn } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { slugify } from "@/lib/build-html";
+import { PresetGallery } from "@/components/website/preset-gallery";
 
 const availableFonts = ["System", "Arial", "Helvetica", "Georgia", "Times New Roman", "Verdana"];
 const colorPresets = [
@@ -33,13 +34,15 @@ export const WebsiteBuilderForm = () => {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#1a1a1a] p-6">
+    <div className="flex h-full w-full flex-col overflow-y-auto bg-[#1a1a1a] p-6">
       <div className="mx-auto w-full max-w-4xl space-y-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">Website Builder</h1>
-          <p className="mt-2 text-white/60">Create and customize your website</p>
+          <p className="mt-2 text-white/60">Pick a template, edit the basics, then publish.</p>
         </div>
+
+        <PresetGallery />
 
         {/* Template Selection */}
         <div className="rounded-lg border border-white/10 bg-white/5 p-6">
