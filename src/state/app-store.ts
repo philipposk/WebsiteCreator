@@ -1,23 +1,43 @@
 import { create } from "zustand";
-import { type Website, type WebsiteInfo, type WebsiteSections } from "@/lib/types";
+import {
+  type Website,
+  type WebsiteInfo,
+  type WebsiteSections,
+  type Service,
+  type Review,
+  type PortfolioItem,
+  type TeamMember,
+  type BlogPost,
+  type Product,
+  type PublishedSite,
+} from "@/lib/types";
 import { nowIso } from "@/lib/utils";
+import { normalizeWebsiteInfo } from "@/lib/normalize";
+
+type ContentKey = "services" | "reviews" | "portfolio" | "team" | "blog" | "products";
+type ContentItem = Service | Review | PortfolioItem | TeamMember | BlogPost | Product;
 
 type AppStore = {
   // Current website being edited
   currentWebsiteId: string | null;
   websites: Website[];
-  
+
   // Website form data
   websiteInfo: WebsiteInfo;
   generatedHTML: string;
   isGenerating: boolean;
-  
+
   // Actions
   setWebsiteInfo: (info: Partial<WebsiteInfo>) => void;
   setWebsiteSections: (sections: Partial<WebsiteSections>) => void;
+  addContentItem: <K extends ContentKey>(key: K, item: WebsiteInfo[K][number]) => void;
+  updateContentItem: <K extends ContentKey>(key: K, id: string, patch: Partial<WebsiteInfo[K][number]>) => void;
+  removeContentItem: (key: ContentKey, id: string) => void;
+  replaceContent: (patch: Partial<Pick<WebsiteInfo, ContentKey>>) => void;
   setGeneratedHTML: (html: string) => void;
   setIsGenerating: (value: boolean) => void;
-  saveWebsite: () => void;
+  saveWebsite: () => string | null;
+  markPublished: (websiteId: string, published: PublishedSite) => void;
   loadWebsite: (websiteId: string) => void;
   deleteWebsite: (websiteId: string) => void;
   newWebsite: () => void;
@@ -51,37 +71,7 @@ const saveWebsitesToStorage = (websites: Website[]) => {
 };
 
 // Default website info
-const defaultWebsiteInfo: WebsiteInfo = {
-  name: "",
-  description: "",
-  phone: "",
-  email: "",
-  address: "",
-  website: "",
-  primaryColor: "#6a5bff",
-  fontFamily: "System",
-  template: "simple",
-  sections: {
-    services: true,
-    portfolio: true,
-    booking: true,
-    reviews: true,
-    blog: true,
-    shop: true,
-    games: true,
-    chatbot: true,
-    forum: true,
-    about: true,
-    technicians: true,
-    adminDashboard: true,
-    statistics: true,
-    giftCards: true,
-    wallet: true,
-    membership: true,
-    waitlist: true,
-    referral: true,
-  },
-};
+const defaultWebsiteInfo: WebsiteInfo = normalizeWebsiteInfo({});
 
 // Save settings to API
 const saveSettingsToAPI = async (settings: {
@@ -161,6 +151,18 @@ const debouncedSaveSettings = (getState: () => AppStore, delay: number = 500) =>
   }, delay);
 };
 
+// Debounced auto-save: whenever the user edits anything, upsert the current website
+// into the websites list and push to the API. Skip until the website has a name.
+let autoSaveTimeout: NodeJS.Timeout | null = null;
+const autoSaveDraft = (getState: () => AppStore, delay: number = 800) => {
+  if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+  autoSaveTimeout = setTimeout(() => {
+    const state = getState();
+    if (!state.websiteInfo.name.trim()) return;
+    state.saveWebsite();
+  }, delay);
+};
+
 export const useAppStore = create<AppStore>((set, get) => ({
   currentWebsiteId: null,
   websites: loadWebsitesFromStorage(),
@@ -168,19 +170,69 @@ export const useAppStore = create<AppStore>((set, get) => ({
   generatedHTML: "",
   isGenerating: false,
   
-  setWebsiteInfo: (info) =>
+  setWebsiteInfo: (info) => {
     set((state) => ({
       websiteInfo: { ...state.websiteInfo, ...info },
-    })),
+    }));
+    autoSaveDraft(get);
+  },
   
-  setWebsiteSections: (sections) =>
+  setWebsiteSections: (sections) => {
     set((state) => ({
       websiteInfo: {
         ...state.websiteInfo,
         sections: { ...state.websiteInfo.sections, ...sections },
       },
-    })),
-  
+    }));
+    autoSaveDraft(get);
+  },
+
+  addContentItem: (key, item) => {
+    set((state) => {
+      const list = (state.websiteInfo[key] as ContentItem[]) || [];
+      return {
+        websiteInfo: {
+          ...state.websiteInfo,
+          [key]: [...list, item],
+        },
+      };
+    });
+    autoSaveDraft(get);
+  },
+
+  updateContentItem: (key, id, patch) => {
+    set((state) => {
+      const list = (state.websiteInfo[key] as ContentItem[]) || [];
+      return {
+        websiteInfo: {
+          ...state.websiteInfo,
+          [key]: list.map((it) => (it.id === id ? { ...it, ...patch } : it)),
+        },
+      };
+    });
+    autoSaveDraft(get);
+  },
+
+  removeContentItem: (key, id) => {
+    set((state) => {
+      const list = (state.websiteInfo[key] as ContentItem[]) || [];
+      return {
+        websiteInfo: {
+          ...state.websiteInfo,
+          [key]: list.filter((it) => it.id !== id),
+        },
+      };
+    });
+    autoSaveDraft(get);
+  },
+
+  replaceContent: (patch) => {
+    set((state) => ({
+      websiteInfo: { ...state.websiteInfo, ...patch },
+    }));
+    autoSaveDraft(get);
+  },
+
   setGeneratedHTML: (html) =>
     set(() => ({
       generatedHTML: html,
@@ -193,39 +245,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
   
   saveWebsite: () => {
     const state = get();
-    if (!state.websiteInfo.name.trim()) return;
-    
+    if (!state.websiteInfo.name.trim()) return null;
+
+    const existing = state.currentWebsiteId
+      ? state.websites.find((w) => w.id === state.currentWebsiteId)
+      : undefined;
+
     const website: Website = {
       id: state.currentWebsiteId || crypto.randomUUID(),
       name: state.websiteInfo.name,
       info: state.websiteInfo,
       htmlCode: state.generatedHTML,
-      createdAt: state.currentWebsiteId
-        ? state.websites.find((w) => w.id === state.currentWebsiteId)?.createdAt || nowIso()
-        : nowIso(),
+      createdAt: existing?.createdAt || nowIso(),
       updatedAt: nowIso(),
+      published: existing?.published,
     };
-    
+
     const existingIndex = state.websites.findIndex((w) => w.id === website.id);
     let updatedWebsites: Website[];
-    
+
     if (existingIndex >= 0) {
       updatedWebsites = [...state.websites];
       updatedWebsites[existingIndex] = website;
     } else {
       updatedWebsites = [website, ...state.websites];
     }
-    
-    // Keep only last 50 websites
+
     if (updatedWebsites.length > 50) {
       updatedWebsites = updatedWebsites.slice(0, 50);
     }
-    
+
     saveWebsitesToStorage(updatedWebsites);
     set({
       websites: updatedWebsites,
       currentWebsiteId: website.id,
     });
+    debouncedSaveSettings(get);
+    return website.id;
+  },
+
+  markPublished: (websiteId, published) => {
+    const state = get();
+    const updated = state.websites.map((w) =>
+      w.id === websiteId ? { ...w, published, updatedAt: nowIso() } : w
+    );
+    saveWebsitesToStorage(updated);
+    set({ websites: updated });
     debouncedSaveSettings(get);
   },
   
@@ -235,7 +300,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (website) {
       set({
         currentWebsiteId: website.id,
-        websiteInfo: website.info,
+        websiteInfo: normalizeWebsiteInfo(website.info),
         generatedHTML: website.htmlCode,
       });
     }
@@ -297,7 +362,14 @@ export const loadStoredSettings = async () => {
       }
       
       if (apiSettings.websiteInfo !== null) {
-        updates.websiteInfo = apiSettings.websiteInfo;
+        updates.websiteInfo = normalizeWebsiteInfo(apiSettings.websiteInfo);
+      }
+
+      if (updates.websites) {
+        updates.websites = updates.websites.map((w) => ({
+          ...w,
+          info: normalizeWebsiteInfo(w.info),
+        }));
       }
       
       if (Object.keys(updates).length > 0) {

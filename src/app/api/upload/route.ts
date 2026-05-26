@@ -1,37 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { nanoid } from "nanoid";
+import { getTenant, tenantPrefix } from "@/lib/tenant";
+
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const allowedImage = /^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i;
 
 export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const type = formData.get("type") as string; // "image" or "video"
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json(
+      { error: "Blob storage is not configured on the server" },
+      { status: 500 }
+    );
+  }
 
-    if (!file) {
+  try {
+    const tenant = await getTenant();
+    const formData = await request.formData();
+    const file = formData.get("file");
+    const kind = (formData.get("type") as string | null) || "image";
+
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-
-    // Validate file type
-    if (type === "image" && !file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Invalid image file" }, { status: 400 });
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { error: `File too large (max ${MAX_BYTES / 1024 / 1024}MB)` },
+        { status: 413 }
+      );
     }
-    if (type === "video" && !file.type.startsWith("video/")) {
-      return NextResponse.json({ error: "Invalid video file" }, { status: 400 });
+    if (kind === "image" && !allowedImage.test(file.type)) {
+      return NextResponse.json(
+        { error: "Only PNG, JPEG, WebP, GIF, or SVG images are allowed" },
+        { status: 415 }
+      );
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(2, 15);
-    const extension = file.name.split(".").pop() || (type === "image" ? "jpg" : "mp4");
-    const filename = `${timestamp}-${randomStr}.${extension}`;
+    const ext =
+      file.name.includes(".") ? file.name.split(".").pop() : kind === "image" ? "jpg" : "bin";
+    const filename = `${Date.now()}-${nanoid(8)}.${ext}`;
+    const path = `${tenantPrefix(tenant)}/uploads/${filename}`;
 
-    // Determine upload path
-    const uploadPath = `${type}s/${filename}`;
-
-    // Upload to Vercel Blob Storage
-    const blob = await put(uploadPath, file, {
+    const blob = await put(path, file, {
       access: "public",
       contentType: file.type,
+      addRandomSuffix: false,
     });
 
     return NextResponse.json({
@@ -40,11 +53,9 @@ export async function POST(request: NextRequest) {
       type: file.type,
       name: file.name,
     });
-  } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json(
-      { error: "Failed to upload file" },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("upload error", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

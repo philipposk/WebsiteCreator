@@ -1,72 +1,181 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/state/app-store";
 import { WebsiteBuilderForm } from "./website-builder-form";
 import { WebsiteSections } from "./website-sections";
 import { WebsitePreview } from "./website-preview";
-import { Sparkles, Loader2, X } from "lucide-react";
+import { ContentEditor } from "./content-editor";
+import {
+  Loader2,
+  X,
+  Wand2,
+  Globe,
+  ExternalLink,
+  Copy,
+  LogIn,
+  AlertTriangle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const WebsiteBuilderPanel = () => {
-  const websiteInfo = useAppStore((state) => state.websiteInfo);
-  const generatedHTML = useAppStore((state) => state.generatedHTML);
-  const isGenerating = useAppStore((state) => state.isGenerating);
-  const setGeneratedHTML = useAppStore((state) => state.setGeneratedHTML);
-  const setIsGenerating = useAppStore((state) => state.setIsGenerating);
-  const saveWebsite = useAppStore((state) => state.saveWebsite);
-  
-  const [activeTab, setActiveTab] = useState<"form" | "sections" | "preview">("form");
-  const [error, setError] = useState<string | null>(null);
+type Tab = "form" | "sections" | "content" | "preview";
 
-  // Auto-dismiss error after 5 seconds
+type Health = {
+  blob: boolean;
+  groq: boolean;
+  auth: boolean;
+  email: boolean;
+};
+
+export const WebsiteBuilderPanel = () => {
+  const websiteInfo = useAppStore((s) => s.websiteInfo);
+  const currentWebsiteId = useAppStore((s) => s.currentWebsiteId);
+  const isGenerating = useAppStore((s) => s.isGenerating);
+  const setIsGenerating = useAppStore((s) => s.setIsGenerating);
+  const saveWebsite = useAppStore((s) => s.saveWebsite);
+  const markPublished = useAppStore((s) => s.markPublished);
+  const setWebsiteInfo = useAppStore((s) => s.setWebsiteInfo);
+  const replaceContent = useAppStore((s) => s.replaceContent);
+  const websites = useAppStore((s) => s.websites);
+
+  const current = websites.find((w) => w.id === currentWebsiteId);
+
+  const [activeTab, setActiveTab] = useState<Tab>("form");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showAIFill, setShowAIFill] = useState(false);
+  const [aiPrompt, setAIPrompt] = useState("");
+  const [aiBusy, setAIBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [health, setHealth] = useState<Health | null>(null);
+
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    fetch("/api/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setHealth(data))
+      .catch(() => setHealth(null));
+  }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 6000);
+    return () => clearTimeout(t);
   }, [error]);
 
-  const handleGenerate = async () => {
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const handleAIFill = async () => {
+    if (!aiPrompt.trim()) return;
+    setAIBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/website/ai-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt, current: websiteInfo }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "AI fill failed");
+      }
+      const data = await res.json();
+      const s = data.suggestion as Partial<typeof websiteInfo>;
+      const scalarPatch: Partial<typeof websiteInfo> = {};
+      (["name", "description", "tagline", "phone", "email", "address"] as const).forEach((k) => {
+        if (typeof s[k] === "string" && s[k]) scalarPatch[k] = s[k] as string;
+      });
+      if (Object.keys(scalarPatch).length) setWebsiteInfo(scalarPatch);
+      replaceContent({
+        ...(Array.isArray(s.services) ? { services: s.services } : {}),
+        ...(Array.isArray(s.reviews) ? { reviews: s.reviews } : {}),
+        ...(Array.isArray(s.portfolio) ? { portfolio: s.portfolio } : {}),
+        ...(Array.isArray(s.team) ? { team: s.team } : {}),
+        ...(Array.isArray(s.blog) ? { blog: s.blog } : {}),
+        ...(Array.isArray(s.products) ? { products: s.products } : {}),
+      });
+      setShowAIFill(false);
+      setAIPrompt("");
+      setActiveTab("content");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "AI fill failed";
+      setError(msg);
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const handlePublish = async () => {
     if (!websiteInfo.name.trim()) {
-      setError("Please enter a website name");
+      setError("Please enter a website name in the Basics tab first.");
+      setActiveTab("form");
       return;
     }
-
     setError(null);
+    setPublishBusy(true);
     setIsGenerating(true);
-
     try {
-      const response = await fetch("/api/website/generate", {
+      const id = saveWebsite();
+      if (!id) throw new Error("Could not save the draft");
+      const res = await fetch("/api/website/publish", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ websiteInfo }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteId: id,
+          websiteInfo,
+          desiredSlug: websiteInfo.slug || undefined,
+        }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate website");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `Publish failed (${res.status})`);
       }
-
-      const data = await response.json();
-      setGeneratedHTML(data.html);
+      const data = (await res.json()) as {
+        slug: string;
+        url: string;
+        publishedAt: string;
+      };
+      markPublished(id, { slug: data.slug, url: data.url, publishedAt: data.publishedAt });
+      setNotice(`Published at ${data.url}`);
       setActiveTab("preview");
-      
-      // Auto-save after generation
-      setTimeout(() => {
-        saveWebsite();
-      }, 500);
-    } catch (err: any) {
-      console.error("Error generating website:", err);
-      setError(err.message || "Failed to generate website");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Publish failed";
+      setError(msg);
     } finally {
+      setPublishBusy(false);
       setIsGenerating(false);
     }
   };
+
+  const copyPublishedUrl = async () => {
+    if (!current?.published?.url) return;
+    try {
+      await navigator.clipboard.writeText(current.published.url);
+      setNotice("Link copied to clipboard.");
+    } catch {
+      setNotice("Could not copy. URL: " + current.published.url);
+    }
+  };
+
+  const tab = (id: Tab, label: string) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={cn(
+        "rounded-lg px-3 py-1.5 text-sm transition",
+        activeTab === id
+          ? "bg-accent/20 text-white"
+          : "text-white/60 hover:text-white hover:bg-white/5"
+      )}
+    >
+      {label}
+    </button>
+  );
+
+  const blobMissing = health && !health.blob;
+  const groqMissing = health && !health.groq;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
@@ -75,61 +184,145 @@ export const WebsiteBuilderPanel = () => {
         <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-lg font-semibold text-white">Website Creator</h1>
           <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab("form")}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm transition",
-                activeTab === "form"
-                  ? "bg-accent/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
-              )}
+            {tab("form", "Basics")}
+            {tab("sections", "Sections")}
+            {tab("content", "Content")}
+            {tab("preview", "Preview")}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {health?.auth && (
+            <a
+              href="/api/auth/signin"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10"
             >
-              Form
+              <LogIn className="h-4 w-4" />
+              Sign in
+            </a>
+          )}
+          <button
+            onClick={() => setShowAIFill((v) => !v)}
+            disabled={isGenerating || groqMissing === true}
+            title={groqMissing ? "GROQ_API_KEY not configured" : ""}
+            className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:opacity-50"
+          >
+            <Wand2 className="h-4 w-4" />
+            AI Fill
+          </button>
+          <button
+            onClick={handlePublish}
+            disabled={publishBusy || !websiteInfo.name.trim() || blobMissing === true}
+            title={blobMissing ? "BLOB_READ_WRITE_TOKEN not configured" : ""}
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {publishBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Publishing…
+              </>
+            ) : current?.published ? (
+              <>
+                <Globe className="h-4 w-4" />
+                Re-publish
+              </>
+            ) : (
+              <>
+                <Globe className="h-4 w-4" />
+                Publish
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {current?.published && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            <span>Live at</span>
+            <a
+              href={current.published.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono underline-offset-2 hover:underline"
+            >
+              {current.published.url}
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyPublishedUrl}
+              className="flex items-center gap-1.5 rounded-md border border-emerald-400/40 px-2 py-1 text-xs transition hover:bg-emerald-500/20"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
             </button>
-            <button
-              onClick={() => setActiveTab("sections")}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm transition",
-                activeTab === "sections"
-                  ? "bg-accent/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
-              )}
+            <a
+              href={current.published.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-md border border-emerald-400/40 px-2 py-1 text-xs transition hover:bg-emerald-500/20"
             >
-              Sections
-            </button>
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </a>
+          </div>
+        </div>
+      )}
+
+      {(blobMissing || groqMissing) && (
+        <div className="flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            {blobMissing && (
+              <p>
+                <strong>Publishing disabled:</strong> set <code>BLOB_READ_WRITE_TOKEN</code> in
+                your Vercel project env to enable publish + saved drafts.
+              </p>
+            )}
+            {groqMissing && (
+              <p>
+                <strong>AI Fill disabled:</strong> set <code>GROQ_API_KEY</code> in your env to
+                draft content from a prompt.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAIFill && (
+        <div className="border-b border-white/10 bg-black/40 px-4 py-3">
+          <label className="mb-1 block text-xs font-medium text-white/70">
+            Describe your business — AI will draft name, services, reviews and team
+          </label>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <textarea
+              value={aiPrompt}
+              onChange={(e) => setAIPrompt(e.target.value)}
+              placeholder="e.g. 'Cozy neighborhood hair salon in Brooklyn, 3 stylists, specializes in curls'"
+              rows={2}
+              className="flex-1 min-w-[280px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-accent focus:outline-none"
+            />
             <button
-              onClick={() => setActiveTab("preview")}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm transition",
-                activeTab === "preview"
-                  ? "bg-accent/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
-              )}
+              onClick={handleAIFill}
+              disabled={aiBusy || !aiPrompt.trim()}
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent/90 disabled:opacity-50"
             >
-              Preview
+              {aiBusy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Drafting…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  Draft content
+                </>
+              )}
             </button>
           </div>
         </div>
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating || !websiteInfo.name.trim()}
-          className={cn(
-            "flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Generate Website
-            </>
-          )}
-        </button>
-      </div>
+      )}
 
       {error && (
         <div className="flex items-center justify-between border-b border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-400">
@@ -144,19 +337,32 @@ export const WebsiteBuilderPanel = () => {
         </div>
       )}
 
+      {notice && (
+        <div className="flex items-center justify-between border-b border-sky-500/40 bg-sky-500/10 px-4 py-2 text-sm text-sky-200">
+          <span>{notice}</span>
+          <button
+            onClick={() => setNotice(null)}
+            className="ml-4 rounded p-1 hover:bg-sky-500/20 transition"
+            aria-label="Dismiss notice"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {activeTab === "form" && <WebsiteBuilderForm />}
         {activeTab === "sections" && (
-          <div className="flex h-full flex-col overflow-y-auto bg-[#1a1a1a] p-6">
+          <div className="flex h-full w-full flex-col overflow-y-auto bg-[#1a1a1a] p-6">
             <div className="mx-auto w-full max-w-4xl">
               <WebsiteSections />
             </div>
           </div>
         )}
+        {activeTab === "content" && <ContentEditor />}
         {activeTab === "preview" && <WebsitePreview />}
       </div>
     </div>
   );
 };
-

@@ -5,24 +5,14 @@ import { CheckSquare, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const sections = [
-  { key: "services", label: "Services", description: "Display your services" },
-  { key: "portfolio", label: "Portfolio Gallery", description: "Showcase your work" },
-  { key: "booking", label: "Online Booking", description: "Allow clients to book appointments" },
-  { key: "reviews", label: "Client Reviews", description: "Show customer testimonials" },
-  { key: "blog", label: "Blog", description: "Share news and updates" },
-  { key: "shop", label: "Product Shop", description: "Sell products online" },
-  { key: "games", label: "Games", description: "Interactive games section" },
-  { key: "chatbot", label: "AI Chatbot", description: "AI-powered customer support" },
-  { key: "forum", label: "Forum", description: "Community discussion forum" },
-  { key: "about", label: "About Us", description: "Tell your story" },
-  { key: "technicians", label: "Professionals", description: "Showcase your team" },
-  { key: "adminDashboard", label: "Admin Dashboard", description: "Administrative tools" },
-  { key: "statistics", label: "Statistics", description: "Display analytics" },
-  { key: "giftCards", label: "Gift Cards", description: "Sell gift cards" },
-  { key: "wallet", label: "Wallet", description: "Digital wallet feature" },
-  { key: "membership", label: "Membership", description: "Membership programs" },
-  { key: "waitlist", label: "Waitlist", description: "Waitlist management" },
-  { key: "referral", label: "Referral Program", description: "Referral system" },
+  { key: "about", label: "About", description: "Tell visitors who you are" },
+  { key: "services", label: "Services", description: "List what you offer (price optional)" },
+  { key: "portfolio", label: "Portfolio", description: "Gallery of past work, with images" },
+  { key: "reviews", label: "Reviews", description: "Real customer testimonials with star ratings" },
+  { key: "technicians", label: "Team", description: "Showcase team members with photo + role" },
+  { key: "booking", label: "Booking CTA", description: "Call-to-action block prompting users to contact you" },
+  { key: "blog", label: "Blog", description: "Recent posts/news (title + excerpt)" },
+  { key: "shop", label: "Shop", description: "Product list with prices" },
 ] as const;
 
 export const WebsiteSections = () => {
@@ -39,7 +29,7 @@ export const WebsiteSections = () => {
     <div className="rounded-lg border border-white/10 bg-white/5 p-6">
       <h2 className="mb-4 text-lg font-semibold text-white">Include Sections</h2>
       <p className="mb-6 text-sm text-white/60">
-        Select which sections to include on your website
+        Toggle which sections appear on your site. Add real content for each enabled section in the &ldquo;Content&rdquo; tab.
       </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {sections.map((section) => {
@@ -73,4 +63,3 @@ export const WebsiteSections = () => {
     </div>
   );
 };
-

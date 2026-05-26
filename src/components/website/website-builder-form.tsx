@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { useAppStore } from "@/state/app-store";
 import { type WebsiteTemplate } from "@/lib/types";
-import { Palette, Type, Globe, Mail, Phone, MapPin, FileText } from "lucide-react";
+import { Palette, Type, Globe, Mail, Phone, MapPin, FileText, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { slugify } from "@/lib/build-html";
 
 const availableFonts = ["System", "Arial", "Helvetica", "Georgia", "Times New Roman", "Verdana"];
 const colorPresets = [
@@ -101,17 +102,77 @@ export const WebsiteBuilderForm = () => {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-white/80">
+                Tagline
+              </label>
+              <input
+                type="text"
+                value={websiteInfo.tagline}
+                onChange={(e) => handleInputChange("tagline", e.target.value)}
+                disabled={isGenerating}
+                placeholder="One-line headline shown under the name"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder:text-white/40 focus:border-accent focus:outline-none disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-white/80">
                 Description
               </label>
               <textarea
                 value={websiteInfo.description}
                 onChange={(e) => handleInputChange("description", e.target.value)}
                 disabled={isGenerating}
-                placeholder="Enter website description"
+                placeholder="A paragraph about your business — used in About + meta tags"
                 rows={3}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder:text-white/40 focus:border-accent focus:outline-none disabled:opacity-50"
               />
             </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-white/80">
+                Public URL slug
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-white/40">/s/</span>
+                <input
+                  type="text"
+                  value={websiteInfo.slug ?? ""}
+                  onChange={(e) => handleInputChange("slug", slugify(e.target.value))}
+                  onBlur={(e) =>
+                    handleInputChange(
+                      "slug",
+                      slugify(e.target.value || websiteInfo.name)
+                    )
+                  }
+                  disabled={isGenerating}
+                  placeholder="auto-generated from name"
+                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder:text-white/40 focus:border-accent focus:outline-none disabled:opacity-50"
+                />
+              </div>
+              <p className="mt-1 text-xs text-white/40">
+                Lowercase letters, numbers, hyphens. Picked at publish if blank.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Brand assets */}
+        <div className="rounded-lg border border-white/10 bg-white/5 p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+            <ImageIcon className="h-5 w-5" />
+            Brand Assets
+          </h2>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <ImageUpload
+              label="Logo (shown in nav, used as favicon)"
+              value={websiteInfo.logoUrl}
+              onChange={(url) => handleInputChange("logoUrl", url)}
+              disabled={isGenerating}
+            />
+            <ImageUpload
+              label="Social share image (Open Graph)"
+              value={websiteInfo.ogImageUrl}
+              onChange={(url) => handleInputChange("ogImageUrl", url)}
+              disabled={isGenerating}
+            />
           </div>
         </div>
 

@@ -1,29 +1,64 @@
 export type WebsiteTemplate = "simple" | "advanced";
 
+export type Service = {
+  id: string;
+  title: string;
+  description: string;
+  price?: string;
+};
+
+export type Review = {
+  id: string;
+  author: string;
+  rating: number;
+  text: string;
+};
+
+export type PortfolioItem = {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl?: string;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  bio?: string;
+  photoUrl?: string;
+};
+
+export type BlogPost = {
+  id: string;
+  title: string;
+  date?: string;
+  excerpt: string;
+};
+
+export type Product = {
+  id: string;
+  name: string;
+  price: string;
+  description: string;
+  imageUrl?: string;
+};
+
 export type WebsiteSections = {
+  about: boolean;
   services: boolean;
   portfolio: boolean;
-  booking: boolean;
   reviews: boolean;
+  technicians: boolean;
+  booking: boolean;
   blog: boolean;
   shop: boolean;
-  games: boolean;
-  chatbot: boolean;
-  forum: boolean;
-  about: boolean;
-  technicians: boolean;
-  adminDashboard: boolean;
-  statistics: boolean;
-  giftCards: boolean;
-  wallet: boolean;
-  membership: boolean;
-  waitlist: boolean;
-  referral: boolean;
 };
 
 export type WebsiteInfo = {
   name: string;
   description: string;
+  tagline: string;
   phone: string;
   email: string;
   address: string;
@@ -32,6 +67,21 @@ export type WebsiteInfo = {
   fontFamily: string;
   template: WebsiteTemplate;
   sections: WebsiteSections;
+  services: Service[];
+  reviews: Review[];
+  portfolio: PortfolioItem[];
+  team: TeamMember[];
+  blog: BlogPost[];
+  products: Product[];
+  logoUrl?: string;
+  ogImageUrl?: string;
+  slug?: string;
+};
+
+export type PublishedSite = {
+  slug: string;
+  url: string;
+  publishedAt: string;
 };
 
 export type Website = {
@@ -41,4 +91,14 @@ export type Website = {
   htmlCode: string;
   createdAt: string;
   updatedAt: string;
+  published?: PublishedSite;
+};
+
+export type ContactSubmission = {
+  id: string;
+  siteId: string;
+  name: string;
+  email: string;
+  message: string;
+  receivedAt: string;
 };
