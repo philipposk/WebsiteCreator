@@ -2,6 +2,16 @@
 
 :root {
   color-scheme: dark;
+  --font-geist-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-playfair: Georgia, "Times New Roman", serif;
+  --font-bebas: Impact, "Arial Narrow", sans-serif;
+  --font-montserrat: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-great-vibes: "Segoe Script", "Apple Chancery", cursive;
+  --font-dancing-script: "Segoe Script", cursive;
+  --font-satisfy: cursive;
+  --font-kalam: "Segoe Script", "Apple Chancery", cursive;
+  --font-permanent-marker: "Marker Felt", "Segoe Print", cursive;
   --background: #080912;
   --foreground: #f5f7ff;
   --muted: #171a2b;
