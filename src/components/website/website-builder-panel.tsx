@@ -132,7 +132,11 @@ export const WebsiteBuilderPanel = () => {
       const res = await fetch("/api/website/ai-fill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: aiPrompt, current: websiteInfo }),
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          current: websiteInfo,
+          apiKey: window.sessionStorage.getItem("visitor-groq-key") || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -442,10 +446,12 @@ export const WebsiteBuilderPanel = () => {
             )}
             {groqMissing && (
               <p>
-                <strong>AI Fill disabled:</strong> set <code>GROQ_API_KEY</code> in your env to
-                draft content from a prompt.
+                <strong>AI Fill uses your key.</strong> Paste a Groq key in the field below. It stays in this browser tab.
               </p>
             )}
+            <p>
+              <a href="https://6x7.gr/#contact">Hire Filippos</a> if you want this built for you.
+            </p>
           </div>
         </div>
       )}
@@ -496,7 +502,7 @@ export const WebsiteBuilderPanel = () => {
               href={checkoutUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-violet-500"
+              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
             >
               <CreditCard className="h-3.5 w-3.5" />
               Pay &amp; Publish
@@ -515,8 +521,15 @@ export const WebsiteBuilderPanel = () => {
       {showAIFill && (
         <div className="border-b border-white/10 bg-black/40 px-4 py-3">
           <label className="mb-1 block text-xs font-medium text-white/70">
-            Describe your business — AI will draft name, services, reviews and team
+            Describe your business. The draft uses your own Groq key and does not invent reviews.
           </label>
+          <input
+            type="password"
+            autoComplete="off"
+            placeholder="Your Groq API key"
+            className="mb-2 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/40"
+            onChange={(e) => window.sessionStorage.setItem("visitor-groq-key", e.target.value)}
+          />
           <div className="flex flex-wrap items-stretch gap-2">
             <textarea
               value={aiPrompt}

@@ -178,7 +178,7 @@ export const Sidebar = ({ onClose }: { onClose?: () => void }) => {
           style={{
             fontFamily: 'var(--font-kalam), cursive',
             fontWeight: 700,
-            background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)',
+            background: 'var(--accent)',
             paddingTop: '1px',
             paddingLeft: '0.5px'
           }}

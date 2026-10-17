@@ -25,8 +25,8 @@ const SYSTEM_PROMPT = `You are a website content generator. Given a short busine
 }
 
 Rules:
-- Generate 3-5 services, 3 reviews, 3 portfolio items, 2-3 team members, 2 blog posts, 3 products.
-- Reviews must look realistic (first name + last initial). Mix 4 and 5 star ratings.
+- Generate 3-5 services, 3 portfolio items, 2-3 team members, 2 blog posts, 3 products.
+- Do not invent reviews, star ratings, or customer quotes. Return "reviews" as an empty array.
 - Prices in plain text like "$45" or "From $99".
 - All copy in the same language as the input description. English if ambiguous.
 - Do not invent contact info (phone/email/address) — leave those for the user.
@@ -45,16 +45,16 @@ function withIds<T extends AnyObj>(arr: unknown): (T & { id: string })[] {
 }
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "GROQ_API_KEY is not configured on the server" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const { prompt } = (await request.json()) as { prompt?: string };
+    const body = (await request.json()) as { prompt?: string; apiKey?: string };
+    const { prompt } = body;
+    const apiKey = (body.apiKey || "").trim() || process.env.GROQ_API_KEY || "";
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Paste your own Groq API key. The server does not have GROQ_API_KEY." },
+        { status: 400 }
+      );
+    }
     if (!prompt || !prompt.trim()) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
