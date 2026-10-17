@@ -12,7 +12,7 @@ import { PresetGallery } from "@/components/website/preset-gallery";
 
 const availableFonts = ["System", "Arial", "Helvetica", "Georgia", "Times New Roman", "Verdana"];
 const colorPresets = [
-  "#6a5bff",
+  "#2f6f62",
   "#007AFF",
   "#34C759",
   "#FF9500",
@@ -311,7 +311,7 @@ export const WebsiteBuilderForm = () => {
                   value={websiteInfo.primaryColor}
                   onChange={(e) => handleInputChange("primaryColor", e.target.value)}
                   disabled={isGenerating}
-                  placeholder="#6a5bff"
+                  placeholder="#2f6f62"
                   className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder:text-white/40 focus:border-accent focus:outline-none disabled:opacity-50"
                 />
               </div>

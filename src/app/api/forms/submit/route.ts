@@ -14,7 +14,7 @@ function thanksHtml(): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Thanks</title>
 <style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f7f7f9;color:#1a1a1a}
 .card{background:#fff;padding:48px 40px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.08);text-align:center;max-width:420px}
-a{color:#6a5bff}</style></head>
+a{color:#2f6f62}</style></head>
 <body><div class="card"><h1>Thanks — message sent</h1><p>We'll get back to you soon.</p>
 <p><a href="javascript:history.back()">Back to the site</a></p></div></body></html>`;
 }

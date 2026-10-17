@@ -19,7 +19,7 @@ const defaults: WebsiteInfo = {
   email: "",
   address: "",
   website: "",
-  primaryColor: "#6a5bff",
+  primaryColor: "#2f6f62",
   fontFamily: "System",
   template: "advanced",
   sections: defaultSections,
