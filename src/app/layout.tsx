@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  // Canonical stays on the .gr address, also when the page is served from the .dk mirror.
+  metadataBase: new URL("https://websitecreator.6x7.gr"),
+  alternates: { canonical: "./" },
   title: "Website Creator · Build Beautiful Websites",
   description:
     "Create and customize beautiful websites with our easy-to-use website builder. Choose from templates, customize design, and export your website.",
